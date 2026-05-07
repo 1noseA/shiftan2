@@ -409,6 +409,7 @@ $$;
 |---|---|---|
 | employees | `(store_id, department_id, is_active)` | 部門別スタッフ一覧 |
 | employees | `(work_pattern_id)` | パターン別の対応スタッフ検索 |
+| employees | UNIQUE `(store_id) WHERE role = 'office' AND is_active = true` | 1店舗 office は有効1アカウントまで（無効化済み履歴は重複可） |
 | day_off_requests | `(staff_id, target_date)` | UNIQUE（既出） |
 | day_off_requests | `(target_date)` | 日付別希望休一覧 |
 | required_staff_counts | `(store_id, department_id, day_type, work_pattern_id)` | UNIQUE（既出） |
@@ -504,7 +505,23 @@ for each row execute function public.sync_employee_email();
 
 招待時の初回同期は、招待API呼び出し直後に `employees` を INSERT する（`id = auth.users.id` で揃える）。
 
-### 6.8 今後の拡張に備える点
+### 6.8 office アカウントの初期作成と復旧
+
+office アカウントは店舗ごとに1アカウントの共有運用で、O-01 / O-02 にアクセスするには office ロールでのログインが必要となる。  
+このため「店舗に有効な office アカウントが0件、かつ無効化済みも存在しない」状態では、UI からの作成・復旧ができない。
+
+#### 初期作成（新店舗開設時）
+
+- 店舗（`stores`）の追加と同時に、office アカウントをマイグレーションまたは管理用CLIで投入する
+- `auth.users` に対する Supabase Auth の招待 API 呼び出しと、`public.employees` への `role = 'office'`、`work_pattern_id = NULL` レコード作成を1セットの運用手順とする
+
+#### 誤無効化からの復旧
+
+- **有効が0件・無効化済みが1件以上残っている場合**：別の office 担当者がいれば、その人にロールフィルタで無効化済みを表示してもらい、O-02 から再有効化できる
+- **有効・無効を含めて0件の場合**：UIからの操作はできないため、DB直接操作または管理用CLIで再投入する
+- 上記を防ぐため、O-02 のフロント側で「最後の有効な office アカウントの無効化」を物理的にブロックする（仕様の詳細は画面設計書 O-02 参照）
+
+### 6.9 今後の拡張に備える点
 
 - 複数店舗運用：`stores` は既に存在するため、UIのストア切替実装で対応可能
 - 人間関係hard制約：`relationship_constraints` に `constraint_level` カラムを追加する形で対応可能
