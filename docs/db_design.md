@@ -14,9 +14,11 @@
 
 | ロール | 説明 |
 |---|---|
-| office | 事務員。スタッフ管理・店舗共通設定（基本設定、勤務パターン、必要人数、自動生成条件）を担当 |
-| manager | 部門マネジャー。自部門のシフト生成・編集・公開、人間関係制約、希望休確認を担当 |
-| staff | シフト対象スタッフ。希望休入力・自部門シフト閲覧 |
+| office | 事務員。スタッフの登録・編集・無効化のみを担当。設定・希望休・シフトには関与しない |
+| manager | 部門マネジャー。基本設定・勤務パターン・必要人数・自動生成条件・人間関係制約の管理、希望休一覧（自部門・締切後編集含む）、自部門のシフト生成・編集・公開を担当 |
+| staff | シフト対象スタッフ。自分の希望休入力・自部門の公開シフト閲覧 |
+
+office担当者本人の希望休管理は、別途staffロールのアカウント（別メールアドレス）で対応する。
 
 ### 1.3 認証連携
 
@@ -373,17 +375,17 @@ $$;
 
 | 機能 / テーブル | office | manager | staff |
 |---|---|---|---|
-| stores | 自店舗：R | 自店舗：R | 自店舗：R |
-| departments（全店共通） | CRUD | R | R |
+| stores | R | R | R |
+| departments（全店共通） | R | R | R |
 | employees | 自店舗：CRUD | 自店舗：R | 自部門：R |
-| work_patterns（全店共通） | CRUD | R | R |
-| shift_settings（全店共通） | RU | R | R |
-| required_staff_counts | 自店舗：CRUD | 自店舗自部門：CRUD | 自店舗：R |
-| auto_generation_settings | 自店舗：CRUD | 自店舗自部門：CRUD | 自店舗：R |
+| work_patterns（全店共通） | R | CRUD | R |
+| shift_settings（全店共通） | × | RU | R |
+| required_staff_counts | × | 自店舗自部門：CRUD | 自店舗：R |
+| auto_generation_settings | × | 自店舗自部門：CRUD | 自店舗：R |
 | relationship_constraints | × | 自店舗自部門：CRUD | × |
-| day_off_requests | 自店舗：CRUD（締切後も可） | 自部門：R | 自分のみ：CRUD（締切前のみ） |
-| shifts | 自店舗：R | 自店舗自部門：CRUD | 自店舗自部門 かつ `status='published'`：R |
-| shift_assignments | 自店舗：R | 自店舗自部門 shift：CRUD | 自店舗自部門 かつ shift `published`：R |
+| day_off_requests | × | 自部門：CRUD（締切後も可） | 自分のみ：CRUD（締切前のみ） |
+| shifts | × | 自店舗自部門：CRUD | 自店舗自部門 かつ `status='published'`：R |
+| shift_assignments | × | 自店舗自部門 shift：CRUD | 自店舗自部門 かつ shift `published`：R |
 
 - C/R/U/D は INSERT / SELECT / UPDATE / DELETE
 - 締切判定はDBファンクション `is_day_off_editable(target_date)` を別途定義し、`day_off_requests` のWITH CHECK内で参照する
