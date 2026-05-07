@@ -68,9 +68,11 @@ flowchart LR
 | 利用画面 | 操作 | 経路 | 備考 |
 |---|---|---|---|
 | O-01 | SELECT | Browser → Supabase | RLS により office は自店舗、manager / staff は自部門に絞り込み |
-| O-02 新規 | INSERT + Auth Invite | **Server Action**（後述 6.1） | 招待メール送信に service_role が必要 |
-| O-02 編集 | UPDATE | Browser → Supabase | 異動時の人間関係制約自動無効化はDBトリガ |
-| O-02 無効化 | UPDATE `is_active=false` | Browser → Supabase | 「最後の有効 office」はフロントで disabled |
+| O-02 新規 | INSERT + Auth Invite | **Server Action `inviteEmployee`**（後述 6.1） | 招待メール送信＋ office 重複チェック |
+| O-02 編集 | UPDATE | **Server Action `updateEmployee`**（後述 6.4） | office 関連項目変更時の重複・最後の1人チェックを集約 |
+| O-02 無効化 | UPDATE `is_active=false` | **Server Action `updateEmployee`**（後述 6.4） | 最後の有効 office はサーバー側で再検証 |
+
+`employees` の INSERT / UPDATE / DELETE は **すべて Server Action（service_role）経由のみ**。RLS は SELECT のみ許可することで、UI からの直接 PostgREST 更新を物理的にブロックする。
 
 ### 3.2 stores / departments / work_patterns
 
@@ -120,21 +122,17 @@ flowchart LR
 | 利用画面 | 操作 | 経路 | 備考 |
 |---|---|---|---|
 | F-03 閲覧 | SELECT | Browser → Supabase | RLS で表示範囲制御 |
-| F-03 編集（手動） | UPDATE / INSERT / DELETE on `shift_assignments` | Browser → Supabase | 楽観ロックは shifts.updated_at で実装 |
-| F-03 公開切替 | UPDATE on `shifts.status` | Browser → Supabase | manager のみ |
-| F-03 生成 | （後述 6.2 generateShift） | Server Action → FastAPI | |
+| F-03 編集（手動） | INSERT / UPDATE / DELETE on `shift_assignments` | **RPC `fn_upsert_shift_assignment` / `fn_delete_shift_assignment`** | 楽観ロック付き、`shifts.updated_at` を一致確認 |
+| F-03 公開切替 | UPDATE on `shifts.status` | **RPC `fn_publish_shift`** | manager のみ、楽観ロック付き |
+| F-03 生成 | （後述 6.2 `generateShift`） | Server Action → FastAPI | |
 
-#### 楽観ロックの呼び出し例
+`shifts` / `shift_assignments` の INSERT / UPDATE / DELETE は **すべて RPC または FastAPI（service_role）経由のみ**。RLS は SELECT のみ許可。RPC の詳細は [db_design.md 6.2 楽観ロック](./db_design.md#62-楽観ロック手動編集) を参照。
 
-```typescript
-const { error } = await supabase
-  .from('shift_assignments')
-  .update({ staff_id: newStaffId })
-  .eq('id', assignmentId)
-  .eq('shifts.updated_at', expectedUpdatedAt) // 親 shifts の updated_at と一致確認
-```
+#### 競合検出時の挙動
 
-実装は親 shifts.updated_at を比較するファンクションラッパー（RPC）を用意するのが推奨。
+- RPC 内で `shifts.updated_at` の不一致を検出すると `P0001` 例外を発生
+- Browser 側は Supabase JS の `.rpc()` 呼び出しでエラーを受け取り、HTTP 換算 `409 Conflict` 相当として処理
+- 画面で「他のユーザーが更新しました」モーダル → 再読込を誘導
 
 ---
 
@@ -147,6 +145,44 @@ const { error } = await supabase
 - リクエスト/レスポンス：`application/json`
 - 文字コード：UTF-8
 - エラー形式：[7.1 共通エラー形式](#71-共通エラー形式) 参照
+
+#### 認可ガード（全エンドポイント共通）
+
+FastAPI は service_role で Supabase にアクセスするため RLS は効かない。代わりに、各エンドポイントで以下のガードを通す：
+
+1. **JWT 署名検証**：Supabase の JWKS で署名と有効期限を検証
+2. **employees 取得**：`auth.uid()` をキーに `employees` から `role` / `store_id` / `department_id` / `is_active` を取得
+3. **権限チェック**：
+   - `is_active = true` でなければ `403 forbidden`
+   - エンドポイントが要求するロール（例：`manager`）でなければ `403 forbidden`
+   - リクエストの `store_id` / `department_id` が呼び出し元と一致しなければ `403 forbidden`
+4. 上記すべて通過した場合のみ本処理に進む
+
+実装イメージ（FastAPI の Depends で再利用）：
+
+```python
+async def require_manager_in_scope(
+    request: ScopeRequest,
+    user_id: UUID = Depends(verify_jwt_and_get_user_id),
+    supabase: Client = Depends(get_service_role_client),
+) -> dict:
+    employee = (
+        supabase.from_("employees")
+        .select("role, store_id, department_id, is_active")
+        .eq("id", str(user_id))
+        .single()
+        .execute()
+    )
+    if not employee.data or not employee.data["is_active"]:
+        raise HTTPException(403, "forbidden")
+    if employee.data["role"] != "manager":
+        raise HTTPException(403, "forbidden")
+    if employee.data["store_id"] != str(request.store_id):
+        raise HTTPException(403, "forbidden")
+    if employee.data["department_id"] != str(request.department_id):
+        raise HTTPException(403, "forbidden")
+    return employee.data
+```
 
 ### 4.2 POST `/shifts/generate`
 
@@ -241,7 +277,7 @@ const { error } = await supabase
 |---|---|---|
 | 400 | `validation_failed` | リクエスト不正（store/department/対象年月の形式不正等） |
 | 401 | `unauthorized` | JWT 不正・期限切れ |
-| 403 | `forbidden` | 自部門外のシフトを生成しようとした（manager のみ自部門） |
+| 403 | `forbidden` | 認可ガード違反（`is_active=false` / `role <> 'manager'` / `store_id` または `department_id` が不一致） |
 | 409 | `shift_already_exists` | 既存シフトあり、`overwrite_existing=false` |
 | 500 | `internal_error` | ソルバー異常終了等 |
 
@@ -277,7 +313,7 @@ const { error } = await supabase
 | HTTP | コード | 説明 |
 |---|---|---|
 | 401 | `unauthorized` | JWT 不正 |
-| 403 | `forbidden` | 自部門外 |
+| 403 | `forbidden` | 認可ガード違反（対象 shift の `store_id` / `department_id` が呼び出し元と不一致） |
 | 404 | `shift_not_found` | shift_id に該当なし |
 
 ### 4.4 GET `/health`
@@ -304,7 +340,12 @@ sequenceDiagram
 
     N->>F: POST /shifts/generate (JWT)
     F->>F: JWT検証 (JWKS)
-    F->>S: SELECT employees, work_patterns,<br/>day_off_requests, required_staff_counts,<br/>auto_generation_settings, relationship_constraints
+    F->>S: SELECT employees<br/>(role / store_id / department_id / is_active)
+    F->>F: 認可ガード<br/>(role=manager かつ scope 一致)
+    alt 認可違反
+        F->>N: 403 forbidden
+    end
+    F->>S: SELECT work_patterns,<br/>day_off_requests, required_staff_counts,<br/>auto_generation_settings, relationship_constraints
     F->>F: 制約モデル構築 + OR-Tools解探索
     alt 解あり
         F->>S: BEGIN
@@ -395,11 +436,44 @@ type GenerateShiftInput = {
 
 FastAPI の `POST /shifts/{shift_id}/evaluate` を呼ぶラッパー。
 
-### 6.4 `disableEmployee(employee_id)`
+### 6.4 `updateEmployee(employee_id, input)`
 
-スタッフ無効化（O-02 無効化ボタン）。
+スタッフ編集・無効化（O-02 編集／無効化ボタン）。**O-02 のすべての更新操作はこの Server Action を経由する**（Browser からの直接 PostgREST 更新は RLS で禁止）。
 
-最後の有効 office アカウント無効化のチェックをサーバー側で再確認してから UPDATE する。
+#### 入力
+
+```typescript
+type UpdateEmployeeInput = {
+  // 更新対象項目（部分更新を許可）
+  last_name?: string
+  first_name?: string
+  account_name?: string  // office用
+  store_id?: string
+  role?: 'office' | 'manager' | 'staff'
+  department_id?: string | null
+  employment_type?: '正社員' | '契約社員' | 'パート' | 'アルバイト'
+  work_pattern_id?: string | null
+  monthly_max_workdays?: number | null
+  max_consecutive_workdays?: number
+  is_active?: boolean
+}
+```
+
+#### 処理
+
+1. 現状の employees レコードを取得
+2. **office 関連項目（`role` / `store_id` / `is_active`）に変更がある場合**：
+   - 変更後の店舗で `role='office' AND is_active=true` の重複が発生しないかチェック
+   - `is_active=false` への変更時：対象店舗の有効な office が他に1名以上残るかチェック（最後の1人なら拒否）
+3. 通常項目の更新も含めて service_role で `employees` を UPDATE
+4. 部門変更があった場合、関連する `relationship_constraints` の自動無効化（DBトリガで実行されるが、再評価誘導のメッセージを返す）
+5. 更新後の employees レコードを返す
+
+#### エラーケース
+
+- office 重複（1店舗1office制約違反）
+- 最後の有効 office の無効化試行
+- バリデーションエラー
 
 ---
 
@@ -495,13 +569,13 @@ MVPでは想定データ量が小さい（30名 × 1ヶ月 = ~900件）ため、
 | F-02 manager | 希望休 CRUD（締切後可） | Supabase 直接 |
 | F-03 閲覧 | shifts/shift_assignments SELECT | Supabase 直接 |
 | F-03 生成 | シフト生成 | `generateShift()` → FastAPI |
-| F-03 編集 | shift_assignments UPDATE | Supabase 直接（楽観ロック） |
+| F-03 編集 | shift_assignments INSERT/UPDATE/DELETE | RPC `fn_upsert_shift_assignment` / `fn_delete_shift_assignment` |
 | F-03 再評価 | 評価再計算 | `evaluateShift()` → FastAPI |
-| F-03 公開 | shifts.status UPDATE | Supabase 直接 |
+| F-03 公開 | shifts.status UPDATE | RPC `fn_publish_shift` |
 | O-01 | employees SELECT | Supabase 直接 |
 | O-02 新規 | 招待 + INSERT | `inviteEmployee()` Server Action |
-| O-02 編集 | employees UPDATE | Supabase 直接 |
-| O-02 無効化 | employees UPDATE | `disableEmployee()` Server Action |
+| O-02 編集 | employees UPDATE | `updateEmployee()` Server Action |
+| O-02 無効化 | employees UPDATE | `updateEmployee()` Server Action |
 
 ### 9.2 Excel 出力
 

@@ -387,19 +387,21 @@ $$;
 |---|---|---|---|
 | stores | R | R | R |
 | departments（全店共通） | R | R | R |
-| employees | 自店舗：CRUD | 自店舗：R | 自部門：R |
+| employees | 自店舗：R | 自店舗：R | 自部門：R |
 | work_patterns（全店共通） | R | CRUD | R |
 | shift_settings（全店共通） | × | RU | R |
 | required_staff_counts | × | 自店舗自部門：CRUD | 自店舗：R |
 | auto_generation_settings | × | 自店舗自部門：CRUD | 自店舗：R |
 | relationship_constraints | × | 自店舗自部門：CRUD | × |
 | day_off_requests | × | 自部門：CRUD（締切後も可） | 自分のみ：CRUD（締切前のみ） |
-| shifts | × | 自店舗自部門：CRUD | 自店舗自部門 かつ `status='published'`：R |
-| shift_assignments | × | 自店舗自部門 shift：CRUD | 自店舗自部門 かつ shift `published`：R |
+| shifts | × | 自店舗自部門：R | 自店舗自部門 かつ `status='published'`：R |
+| shift_assignments | × | 自店舗自部門 shift：R | 自店舗自部門 かつ shift `published`：R |
 
 - C/R/U/D は INSERT / SELECT / UPDATE / DELETE
 - 締切判定はDBファンクション `is_day_off_editable(target_date)` を別途定義し、`day_off_requests` のWITH CHECK内で参照する
-- `employees` の UPDATE は office のみに限定する。manager / staff からのプロフィール直接編集は提供しない（パスワード・メールアドレス変更は Supabase Auth API 経由で行い、変更結果は `auth.users` 同期トリガを介して `employees` に反映される。6.7参照）
+- **`employees` の INSERT / UPDATE / DELETE は Server Action（service_role）経由のみ**。RLS は SELECT のみを許可する。重複チェック・最後の有効 office 担保等のドメインロジックを Server Action に集約するため
+- **`shifts` / `shift_assignments` の INSERT / UPDATE / DELETE は楽観ロック付きRPCまたはFastAPI（service_role）経由のみ**。RLS は SELECT のみを許可する
+- パスワード・メールアドレス変更は Supabase Auth API 経由で行い、変更結果は `auth.users` 同期トリガを介して `employees` に反映される（6.7参照）
 
 ---
 
@@ -435,11 +437,50 @@ $$;
 将来の複数店舗対応時は、店舗追加と店舗単位以下のデータの `store_id` 紐づけだけで分離できる構成。  
 UI上の店舗切替は要件外（1店舗運用）。
 
-### 6.2 楽観ロック
+### 6.2 楽観ロック（手動編集）
 
-`shifts.updated_at` を競合検出に利用する。  
-クライアントは編集前の `updated_at` をリクエストに含め、サーバー側で一致確認後に更新する。  
-不一致の場合は `409 Conflict` を返し、画面で再読込を促す。
+シフトの手動編集（`shift_assignments` の追加・変更・削除、`shifts.status` の公開切替）は楽観ロック付き RPC を経由する。Browser から PostgREST 直接 UPDATE は許可しない（RLS で SELECT のみ許可）。
+
+#### 推奨RPC
+
+| 関数名 | 用途 |
+|---|---|
+| `fn_upsert_shift_assignment(p_shift_id, p_target_date, p_work_pattern_id, p_staff_id, p_expected_updated_at)` | スタッフ割当の追加・変更 |
+| `fn_delete_shift_assignment(p_assignment_id, p_shift_id, p_expected_updated_at)` | スタッフ割当の削除 |
+| `fn_publish_shift(p_shift_id, p_expected_updated_at, p_status)` | 公開／非公開切替 |
+
+#### 競合検出ロジック
+
+```sql
+create or replace function fn_upsert_shift_assignment(
+  p_shift_id uuid,
+  p_target_date date,
+  p_work_pattern_id uuid,
+  p_staff_id uuid,
+  p_expected_updated_at timestamptz
+) returns shift_assignments
+language plpgsql security definer as $$
+declare
+  v_current_updated_at timestamptz;
+  v_assignment shift_assignments;
+begin
+  select updated_at into v_current_updated_at
+    from shifts where id = p_shift_id for update;
+  if v_current_updated_at is null then
+    raise exception 'shift_not_found' using errcode = 'P0002';
+  end if;
+  if v_current_updated_at <> p_expected_updated_at then
+    raise exception 'optimistic_lock_conflict' using errcode = 'P0001';
+  end if;
+  insert into shift_assignments (shift_id, target_date, work_pattern_id, staff_id, assignment_type)
+    values (p_shift_id, p_target_date, p_work_pattern_id, p_staff_id, 'manual')
+    returning * into v_assignment;
+  update shifts set updated_at = now() where id = p_shift_id;
+  return v_assignment;
+end $$;
+```
+
+`P0001`（楽観ロック競合）はAPI側で `409 Conflict` に変換し、画面で再読込を促す。
 
 ### 6.3 シフト再生成
 
