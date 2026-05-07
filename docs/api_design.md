@@ -134,6 +134,85 @@ flowchart LR
 - Browser 側は Supabase JS の `.rpc()` 呼び出しでエラーを受け取り、HTTP 換算 `409 Conflict` 相当として処理
 - 画面で「他のユーザーが更新しました」モーダル → 再読込を誘導
 
+### 3.8 楽観ロック付き手動編集 RPC の入出力契約
+
+クライアント（Browser）から `supabase.rpc('<関数名>', { ... })` で呼び出す。RPC 関数の SQL 実装は [db_design.md 6.2](./db_design.md#62-楽観ロック手動編集) を参照。
+
+#### 3.8.1 `fn_upsert_shift_assignment`
+
+スタッフ割当の追加・変更を行う。
+
+| 引数 | 型 | NULL | 説明 |
+|---|---|---|---|
+| p_shift_id | uuid | NOT NULL | 対象シフトID |
+| p_target_date | date | NOT NULL | 勤務日 |
+| p_work_pattern_id | uuid | NOT NULL | 勤務パターンID |
+| p_staff_id | uuid | NOT NULL | 割当スタッフID |
+| p_expected_updated_at | timestamptz | NOT NULL | 楽観ロック比較用（編集時に取得した shifts.updated_at） |
+| p_assignment_id | uuid | NULL可 | NULL で新規 INSERT、指定で該当 assignment の UPDATE |
+
+**戻り値**：作成・更新後の `shift_assignments` 行（1件）
+
+**エラーコード**：
+
+| コード | 発生条件 | HTTP 換算 | クライアント対応 |
+|---|---|---|---|
+| `P0001` | shifts.updated_at が `p_expected_updated_at` と不一致 | 409 | 競合モーダル → 再読込 |
+| `P0002` | shift_id が存在しない | 404 | エラー表示 |
+| `23505`（unique_violation） | 同一スタッフが同日に既に割当済（1日1シフト制約違反） | 409 | 「このスタッフは同日に別シフトに割当済」と表示 |
+| `23503`（foreign_key_violation） | staff_id / work_pattern_id が存在しない | 400 | バリデーションエラー表示 |
+
+**手動編集時のドメイン違反の扱い**：
+
+- 必要人数超過、希望休衝突、勤務パターン不一致、連勤超過などの **整合性違反は RPC 側では弾かない**（manager の緊急対応で違反割当を許容するため）
+- 警告表示はクライアント側で計算し、F-03 の編集モーダル（候補者リスト）でアイコン表示する
+
+#### 3.8.2 `fn_delete_shift_assignment`
+
+スタッフ割当の削除を行う。
+
+| 引数 | 型 | NULL | 説明 |
+|---|---|---|---|
+| p_assignment_id | uuid | NOT NULL | 削除対象 |
+| p_shift_id | uuid | NOT NULL | 親シフトID（楽観ロック対象） |
+| p_expected_updated_at | timestamptz | NOT NULL | 楽観ロック比較用 |
+
+**戻り値**：void（成功時のみ完了）
+
+**エラーコード**：
+
+| コード | 発生条件 | HTTP 換算 |
+|---|---|---|
+| `P0001` | shifts.updated_at 不一致 | 409 |
+| `P0002` | shift_id が存在しない | 404 |
+| `P0003` | assignment_id が存在しない、または shift_id 配下にない | 404 |
+
+#### 3.8.3 `fn_publish_shift`
+
+シフトの公開／非公開ステータスを切り替える。
+
+| 引数 | 型 | NULL | 説明 |
+|---|---|---|---|
+| p_shift_id | uuid | NOT NULL | 対象シフト |
+| p_expected_updated_at | timestamptz | NOT NULL | 楽観ロック比較用 |
+| p_status | text | NOT NULL | `'draft'` または `'published'` |
+
+**戻り値**：更新後の `shifts` 行（1件）
+
+**エラーコード**：
+
+| コード | 発生条件 | HTTP 換算 |
+|---|---|---|
+| `P0001` | shifts.updated_at 不一致 | 409 |
+| `P0002` | shift_id が存在しない | 404 |
+| `P0004`（invalid_status） | `p_status` が許容値以外 | 400 |
+
+#### 3.8.4 共通仕様
+
+- すべての RPC は `SECURITY DEFINER` で定義し、関数オーナー権限で実行する
+- 関数内で呼び出し元の `auth.uid()` から employees を読み、`role='manager'` かつ自店舗自部門の shift であることを検証する（service_role 越権を防ぐ追加防御）
+- ステータスや shift の所有部門が呼び出し元と一致しない場合は `P0005`（forbidden）を発生し 403 換算
+
 ---
 
 ## 4. FastAPI エンドポイント
@@ -369,6 +448,29 @@ sequenceDiagram
 
 クライアントから直接呼べないサーバー側処理。
 
+### 6.0 共通：呼び出し元認可ガード
+
+すべての Server Action は冒頭で **呼び出し元の認可** を確認する。`service_role` を使う以上、UI 側を信用せず Server Action 内部で再検証する。
+
+```typescript
+async function requireOfficeInScope(targetStoreId: string) {
+  const { data: { user } } = await supabaseServer.auth.getUser()
+  if (!user) throw new ApiError('unauthorized', 401)
+
+  const { data: caller } = await supabaseServer
+    .from('employees')
+    .select('role, store_id, is_active')
+    .eq('id', user.id)
+    .single()
+
+  if (!caller || !caller.is_active) throw new ApiError('forbidden', 403)
+  if (caller.role !== 'office') throw new ApiError('forbidden', 403)
+  if (caller.store_id !== targetStoreId) throw new ApiError('forbidden', 403)
+}
+```
+
+employees 操作系の Server Action（`inviteEmployee` / `updateEmployee`）はこのガードを冒頭で必ず通す。シフト系（`generateShift` / `evaluateShift`）は manager ロールチェックを行う同等のガードを使う（FastAPI 側のガードと同等の処理を Server Action 側でも先に弾く）。
+
 ### 6.1 `inviteEmployee(input)`
 
 スタッフ登録（O-02 新規）に対応。
@@ -395,15 +497,17 @@ type InviteEmployeeInput = {
 
 #### 処理
 
-1. ロール別バリデーション（office用のダミー値補完を含む）
-2. office の場合：対象店舗に有効な office が存在しないことを確認
-3. Supabase Auth Admin API で招待メール送信（`auth.admin.inviteUserByEmail`）
-4. `auth.users.id` を取得
-5. `public.employees` に INSERT（`id = auth.users.id`）
-6. 成功時は employees レコードを返す
+1. **呼び出し元認可ガード**：`requireOfficeInScope(input.store_id)` を実行（6.0 参照）
+2. ロール別バリデーション（office用のダミー値補完を含む）
+3. office の場合：対象店舗に有効な office が存在しないことを確認
+4. Supabase Auth Admin API で招待メール送信（`auth.admin.inviteUserByEmail`）
+5. `auth.users.id` を取得
+6. `public.employees` に INSERT（`id = auth.users.id`）
+7. 成功時は employees レコードを返す
 
 #### エラーケース
 
+- 認可エラー（`unauthorized` / `forbidden`）
 - メールアドレス重複
 - office 重複（1店舗1office制約違反）
 - バリデーションエラー
@@ -462,15 +566,17 @@ type UpdateEmployeeInput = {
 #### 処理
 
 1. 現状の employees レコードを取得
-2. **office 関連項目（`role` / `store_id` / `is_active`）に変更がある場合**：
+2. **呼び出し元認可ガード**：`requireOfficeInScope(現在のstore_id)` を実行。`store_id` 変更を伴う場合は変更後の `store_id` も同じガードで検証する
+3. **office 関連項目（`role` / `store_id` / `is_active`）に変更がある場合**：
    - 変更後の店舗で `role='office' AND is_active=true` の重複が発生しないかチェック
    - `is_active=false` への変更時：対象店舗の有効な office が他に1名以上残るかチェック（最後の1人なら拒否）
-3. 通常項目の更新も含めて service_role で `employees` を UPDATE
-4. 部門変更があった場合、関連する `relationship_constraints` の自動無効化（DBトリガで実行されるが、再評価誘導のメッセージを返す）
-5. 更新後の employees レコードを返す
+4. 通常項目の更新も含めて service_role で `employees` を UPDATE
+5. 部門変更があった場合、関連する `relationship_constraints` の自動無効化（DBトリガで実行されるが、再評価誘導のメッセージを返す）
+6. 更新後の employees レコードを返す
 
 #### エラーケース
 
+- 認可エラー（`unauthorized` / `forbidden`）
 - office 重複（1店舗1office制約違反）
 - 最後の有効 office の無効化試行
 - バリデーションエラー
