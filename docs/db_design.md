@@ -138,7 +138,6 @@ erDiagram
         uuid department_id FK
         bool enable_day_off_hard
         bool enable_max_consecutive
-        bool enable_one_shift_per_day
         bool enable_workable_pattern
         bool enable_relationship_soft
         bool enable_fairness
@@ -303,7 +302,6 @@ erDiagram
 | department_id | uuid | NOT NULL | | FK→`departments.id` |
 | enable_day_off_hard | bool | NOT NULL | `true` | 希望休をハード制約として扱う |
 | enable_max_consecutive | bool | NOT NULL | `false` | 最大連勤日数 |
-| enable_one_shift_per_day | bool | NOT NULL | `true` | 1日1シフト |
 | enable_workable_pattern | bool | NOT NULL | `false` | 勤務パターン制約 |
 | enable_relationship_soft | bool | NOT NULL | `false` | 人間関係soft制約 |
 | enable_fairness | bool | NOT NULL | `false` | 公平性考慮 |
