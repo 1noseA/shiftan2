@@ -34,7 +34,7 @@
 
 | 入力 | 取得元テーブル | 用途 |
 |---|---|---|
-| 対象スタッフ | `employees` (`role IN ('manager','staff')`, `is_active=true`, `store_id`, `department_id`, `work_pattern_id IS NOT NULL`) | 割当候補 |
+| 対象スタッフ | `employees` (`role IN ('manager','staff')`, `is_active=true`, `store_id`, `department_id`, `work_pattern_id IS NOT NULL`) | 割当候補（`work_pattern_id IS NOT NULL` はシフト対象資格の確認であり H4 フラグとは独立） |
 | 勤務パターン | `work_patterns` (`is_active=true`) | 割当先 |
 | 必要人数 | `required_staff_counts` (`store_id`, `department_id`) | 平日／休日 × 勤務パターンごとの必要数 |
 | 希望休 | `day_off_requests` (対象スタッフ × 対象月) | ハード制約 |
@@ -113,6 +113,13 @@ y[d, s] = Σ_p x[d, p, s]    # スタッフ s が日付 d に出勤するか（0
 実装イメージ：
 
 ```python
+# x[d, p, s] の変数生成範囲を決定（H4 フラグで分岐）
+if settings.enable_workable_pattern:
+    patterns_for = {s: [wp[s]] for s in staff_list}        # wp[s] のみ
+else:
+    patterns_for = {s: all_patterns for s in staff_list}   # 全パターン
+x = build_variables(model, days, staff_list, patterns_for)
+
 add_one_shift_per_day_constraint(model, x)
 if settings.enable_day_off_hard:
     add_day_off_hard_constraint(model, x, day_off_set)
@@ -120,7 +127,6 @@ if settings.enable_workable_pattern:
     fix_pattern_mismatch_to_zero(model, x, work_pattern_per_staff)
 if settings.enable_max_consecutive:
     add_consecutive_limit_constraint(model, y, max_cons_per_staff)
-# H6 はスタッフごとに条件付きで追加
 for s in staff_list:
     if s.max_workdays_per_month is not None:
         add_monthly_max_constraint(model, y, s)
@@ -148,11 +154,17 @@ for s in staff_list:
 
 #### H4. 勤務パターンの一致（v5）
 
+**H4 ON（`enable_workable_pattern=true`）**：
+
 ```
 ∀d ∈ D, ∀s ∈ S, ∀p ∈ P with p ≠ wp[s]:    x[d, p, s] = 0
 ```
 
-実装上は wp[s] 以外のパターンに関する変数を作らず、定数 0 で固定するのが効率的。
+実装上は `wp[s]` のパターンのみ変数を生成し、それ以外は定数 0 で固定することで変数数を削減できる。
+
+**H4 OFF（`enable_workable_pattern=false`）**：
+
+制約を加えない（任意のパターン割当を許可）。このとき `x[d, p, s]` は全 `p ∈ P` について変数を生成する。H4 ON 時の「wp[s] のみ生成」最適化は適用しない。
 
 #### H5. 最大連勤日数（v4）
 
@@ -489,7 +501,7 @@ return { shift_id, assignments_count, evaluation }
 |---|---|
 | `request_id` | 全経路で伝播する一意ID |
 | `solve_time_ms` | CP-SAT 求解時間 |
-| `solver_status` | OPTIMAL / FEASIBLE / INFEASIBLE / UNKNOWN |
+| `solver_status` | OPTIMAL / FEASIBLE / UNKNOWN_WITH_SOLUTION / TIMEOUT_NO_SOLUTION / INFEASIBLE |
 | `objective_value` | 解の目的関数値 |
 | 違反数 | 各種ハード／ソフト制約違反数 |
 
