@@ -42,13 +42,16 @@ export default function WorkPatternList({ patterns }: { patterns: WorkPattern[] 
     e.preventDefault();
     setLoading(true);
     const fd = new FormData(e.currentTarget);
-    if (editing) {
-      await updateWorkPattern(editing.id, fd);
-    } else {
-      await createWorkPattern(fd);
+    try {
+      if (editing) {
+        await updateWorkPattern(editing.id, fd);
+      } else {
+        await createWorkPattern(fd);
+      }
+      setShowForm(false);
+    } finally {
+      setLoading(false);
     }
-    setShowForm(false);
-    setLoading(false);
   }
 
   return (

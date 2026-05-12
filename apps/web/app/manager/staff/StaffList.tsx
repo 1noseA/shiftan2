@@ -67,18 +67,24 @@ export default function StaffList({
   async function handleInvite(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
-    await inviteEmployee(new FormData(e.currentTarget));
-    setMode("idle");
-    setLoading(false);
+    try {
+      await inviteEmployee(new FormData(e.currentTarget));
+      setMode("idle");
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function handleUpdate(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!editing) return;
     setLoading(true);
-    await updateEmployee(editing.id, new FormData(e.currentTarget));
-    setMode("idle");
-    setLoading(false);
+    try {
+      await updateEmployee(editing.id, new FormData(e.currentTarget));
+      setMode("idle");
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function handleDeactivate(id: string) {

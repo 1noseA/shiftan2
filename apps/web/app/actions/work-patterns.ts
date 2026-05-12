@@ -1,5 +1,6 @@
 "use server";
 
+import { createClient as createUserClient } from "@/lib/supabase/server";
 import { createClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 
@@ -11,13 +12,31 @@ function adminClient() {
   );
 }
 
+async function requireManager() {
+  const supabase = await createUserClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("unauthorized");
+
+  const { data: caller } = await supabase
+    .from("employees")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+  if (caller?.role !== "manager") throw new Error("forbidden");
+}
+
 function calcWorkingMinutes(start: string, end: string, breakMin: number): number {
   const [sh, sm] = start.split(":").map(Number);
   const [eh, em] = end.split(":").map(Number);
-  return (eh * 60 + em) - (sh * 60 + sm) - breakMin;
+  let totalMinutes = (eh * 60 + em) - (sh * 60 + sm);
+  if (totalMinutes <= 0) totalMinutes += 24 * 60;
+  const working = totalMinutes - breakMin;
+  if (working <= 0) throw new Error("working_minutes_must_be_positive");
+  return working;
 }
 
 export async function createWorkPattern(formData: FormData) {
+  await requireManager();
   const supabase = adminClient();
   const start = formData.get("start_time") as string;
   const end = formData.get("end_time") as string;
@@ -35,6 +54,7 @@ export async function createWorkPattern(formData: FormData) {
 }
 
 export async function updateWorkPattern(id: string, formData: FormData) {
+  await requireManager();
   const supabase = adminClient();
   const start = formData.get("start_time") as string;
   const end = formData.get("end_time") as string;
@@ -53,6 +73,7 @@ export async function updateWorkPattern(id: string, formData: FormData) {
 }
 
 export async function toggleWorkPattern(id: string, isActive: boolean) {
+  await requireManager();
   const supabase = adminClient();
   const { error } = await supabase
     .from("work_patterns")

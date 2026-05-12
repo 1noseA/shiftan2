@@ -7,6 +7,13 @@ export default async function StaffPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/auth/login");
 
+  const { data: caller } = await supabase
+    .from("employees")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+  if (caller?.role !== "manager") redirect("/");
+
   const [{ data: staff }, { data: departments }, { data: workPatterns }] = await Promise.all([
     supabase
       .from("employees")
