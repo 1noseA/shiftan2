@@ -2,25 +2,25 @@
 
 ## Sprint 0：開発基盤・認証
 
-- [ ] モノレポ構成 (ルート `package.json` / Turborepo)
-- [ ] Next.js 14 App Router プロジェクト作成
-- [ ] FastAPI プロジェクト骨格作成 (`shift_generator/` ディレクトリ)
-- [ ] Supabase プロジェクト作成・環境変数設定
-- [ ] Supabase Auth メール認証実装（サインアップ・ログイン・ログアウト）
-- [ ] Next.js ミドルウェアでのロール判定（manager / staff）
-- [ ] ロール別ダッシュボードページ作成
-- [ ] Vercel (Next.js) / Render (FastAPI) デプロイ設定
+- [x] モノレポ構成 (ルート `package.json` / Turborepo)
+- [x] Next.js 14 App Router プロジェクト作成
+- [x] FastAPI プロジェクト骨格作成 (`shift_generator/` ディレクトリ)
+- [x] Supabase プロジェクト作成・環境変数設定
+- [x] Supabase Auth メール認証実装（サインアップ・ログイン・ログアウト）
+- [x] Next.js ミドルウェアでのロール判定（manager / staff）
+- [x] ロール別ダッシュボードページ作成
+- [x] Vercel (Next.js) / Render (FastAPI) デプロイ設定
 
 ## Sprint 1：スタッフ管理
 
-- [ ] `employees` / `work_patterns` テーブルマイグレーション作成
-- [ ] RLS ポリシー設定（`employees`）
-- [ ] スタッフ一覧画面 (UI + PostgREST SELECT)
-- [ ] スタッフ招待 (`inviteEmployee` Server Action + Supabase Auth `inviteUserByEmail`)
-- [ ] スタッフ編集画面 (`updateEmployee` Server Action)
-- [ ] スタッフ無効化 (`is_active=false`)
-- [ ] 勤務パターン一覧・設定UI (work_patterns CRUD)
-- [ ] スタッフへの勤務パターン割当・最大連勤日数設定
+- [x] `employees` / `work_patterns` テーブルマイグレーション作成
+- [x] RLS ポリシー設定（`employees`）
+- [x] スタッフ一覧画面 (UI + PostgREST SELECT)
+- [x] スタッフ招待 (`inviteEmployee` Server Action + Supabase Auth `inviteUserByEmail`)
+- [x] スタッフ編集画面 (`updateEmployee` Server Action)
+- [x] スタッフ無効化 (`is_active=false`)
+- [x] 勤務パターン一覧・設定UI (work_patterns CRUD)
+- [x] スタッフへの勤務パターン割当・最大連勤日数設定
 
 ## Sprint 2：シフト条件設定
 
