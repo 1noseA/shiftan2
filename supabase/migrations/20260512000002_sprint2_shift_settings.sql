@@ -46,11 +46,10 @@ create table if not exists public.required_staff_counts (
   constraint required_staff_counts_day_type_check
     check (day_type in ('weekday', 'holiday')),
   constraint required_staff_counts_unique
-    unique (store_id, department_id, day_type, work_pattern_id)
+    unique (store_id, department_id, day_type, work_pattern_id),
+  constraint required_staff_counts_count_check
+    check (required_count >= 0)
 );
-
-create index if not exists required_staff_counts_lookup_idx
-  on public.required_staff_counts (store_id, department_id, day_type, work_pattern_id);
 
 alter table public.required_staff_counts enable row level security;
 
@@ -93,9 +92,6 @@ create table if not exists public.auto_generation_settings (
   constraint auto_generation_settings_unique
     unique (store_id, department_id)
 );
-
-create index if not exists auto_generation_settings_lookup_idx
-  on public.auto_generation_settings (store_id, department_id);
 
 alter table public.auto_generation_settings enable row level security;
 
@@ -141,6 +137,8 @@ create table if not exists public.relationship_constraints (
 -- ペア重複防止（A-B と B-A を同一ペアとして扱う）
 create unique index if not exists relationship_constraints_pair_idx
   on public.relationship_constraints (
+    store_id,
+    department_id,
     least(staff_a_id, staff_b_id),
     greatest(staff_a_id, staff_b_id)
   );

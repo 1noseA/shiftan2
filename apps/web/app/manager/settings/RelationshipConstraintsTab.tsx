@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   createRelationshipConstraint,
   toggleRelationshipConstraint,
@@ -32,6 +33,7 @@ export default function RelationshipConstraintsTab({
   constraints: Constraint[];
   staffList: Staff[];
 }) {
+  const router = useRouter();
   const [filter, setFilter] = useState<"all" | "active" | "inactive">("all");
   const [showModal, setShowModal] = useState(false);
   const [staffA, setStaffA] = useState("");
@@ -53,6 +55,7 @@ export default function RelationshipConstraintsTab({
     setModalError(null);
     try {
       await createRelationshipConstraint(staffA, staffB, reason);
+      router.refresh();
       setShowModal(false);
       setStaffA("");
       setStaffB("");
@@ -75,6 +78,7 @@ export default function RelationshipConstraintsTab({
     setTogglingId(id);
     try {
       await toggleRelationshipConstraint(id, !current);
+      router.refresh();
     } finally {
       setTogglingId(null);
     }

@@ -33,7 +33,7 @@ export async function upsertShiftSettings(formData: FormData) {
   const deadline = parseInt(formData.get("day_off_request_deadline_day") as string);
   const maxDays = parseInt(formData.get("day_off_max_per_month") as string);
   if (isNaN(deadline) || deadline < 1 || deadline > 28) throw new Error("invalid_deadline");
-  if (isNaN(maxDays) || maxDays < 1) throw new Error("invalid_max_days");
+  if (isNaN(maxDays) || maxDays < 1 || maxDays > 31) throw new Error("invalid_max_days");
 
   const supabase = adminClient();
   const { error } = await supabase.from("shift_settings").upsert({
@@ -124,13 +124,15 @@ export async function createRelationshipConstraint(
 }
 
 export async function toggleRelationshipConstraint(id: string, isActive: boolean) {
-  await requireManager();
+  const emp = await requireManager();
   const supabase = adminClient();
 
   const { error } = await supabase
     .from("relationship_constraints")
     .update({ is_active: isActive, updated_at: new Date().toISOString() })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("store_id", emp.store_id)
+    .eq("department_id", emp.department_id);
   if (error) throw new Error(error.message);
   revalidatePath("/manager/settings");
 }

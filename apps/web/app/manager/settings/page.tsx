@@ -76,6 +76,17 @@ export default async function SettingsPage() {
       .order("last_name"),
   ]);
 
+  const constraints: Constraint[] = (constraintsRes.data ?? []).map((c) => ({
+    id: c.id,
+    staff_a_id: c.staff_a_id,
+    staff_b_id: c.staff_b_id,
+    reason: c.reason,
+    is_active: c.is_active,
+    created_at: c.created_at,
+    staff_a: (Array.isArray(c.staff_a) ? c.staff_a[0] : c.staff_a) as StaffRef,
+    staff_b: (Array.isArray(c.staff_b) ? c.staff_b[0] : c.staff_b) as StaffRef,
+  }));
+
   return (
     <div className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-5xl mx-auto">
@@ -91,7 +102,7 @@ export default async function SettingsPage() {
             }[]
           }
           autoGenSettings={autoGenRes.data ?? null}
-          constraints={(constraintsRes.data ?? []) as unknown as Constraint[]}
+          constraints={constraints}
           staffList={staffRes.data ?? []}
         />
       </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { saveRequiredStaffCounts } from "@/app/actions/settings";
 
 type WorkPattern = {
@@ -38,6 +39,7 @@ export default function RequiredStaffTab({
   patterns: WorkPattern[];
   counts: RequiredCount[];
 }) {
+  const router = useRouter();
   const [countMap, setCountMap] = useState<CountMap>(() =>
     buildCountMap(patterns, counts)
   );
@@ -66,6 +68,7 @@ export default function RequiredStaffTab({
     ]);
     try {
       await saveRequiredStaffCounts(rows);
+      router.refresh();
       setSaved(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "保存に失敗しました");

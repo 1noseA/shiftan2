@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { upsertAutoGenerationSettings } from "@/app/actions/settings";
 
 type AutoGenSettings = {
@@ -44,6 +45,7 @@ export default function AutoGenerationTab({
 }: {
   settings: AutoGenSettings;
 }) {
+  const router = useRouter();
   const [flags, setFlags] = useState({
     enable_day_off_hard: settings?.enable_day_off_hard ?? true,
     enable_max_consecutive: settings?.enable_max_consecutive ?? false,
@@ -63,6 +65,7 @@ export default function AutoGenerationTab({
     const fd = new FormData(e.currentTarget);
     try {
       await upsertAutoGenerationSettings(fd);
+      router.refresh();
       setSaved(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "保存に失敗しました");

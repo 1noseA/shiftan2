@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { upsertShiftSettings } from "@/app/actions/settings";
 
 type ShiftSettings = {
@@ -10,6 +11,7 @@ type ShiftSettings = {
 } | null;
 
 export default function BasicSettingsTab({ settings }: { settings: ShiftSettings }) {
+  const router = useRouter();
   const [deadline, setDeadline] = useState(
     String(settings?.day_off_request_deadline_day ?? 10)
   );
@@ -28,6 +30,7 @@ export default function BasicSettingsTab({ settings }: { settings: ShiftSettings
     const fd = new FormData(e.currentTarget);
     try {
       await upsertShiftSettings(fd);
+      router.refresh();
       setSaved(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "保存に失敗しました");
@@ -67,6 +70,7 @@ export default function BasicSettingsTab({ settings }: { settings: ShiftSettings
               name="day_off_max_per_month"
               type="number"
               min={1}
+              max={31}
               value={maxDays}
               onChange={(e) => setMaxDays(e.target.value)}
               required
