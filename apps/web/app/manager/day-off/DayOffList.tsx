@@ -130,8 +130,8 @@ export default function DayOffList({ yearMonth, staffList, requests }: Props) {
                   {staffList.map((staff) => {
                     const dates = staffDateSet.get(staff.id) ?? new Set<string>();
                     return (
-                      <tr key={staff.id} className="hover:bg-gray-50">
-                        <td className="sticky left-0 z-10 bg-white px-4 py-2 font-medium text-gray-800 border-r border-gray-200 whitespace-nowrap">
+                      <tr key={staff.id} className="group hover:bg-gray-50">
+                        <td className="sticky left-0 z-10 bg-white group-hover:bg-gray-50 px-4 py-2 font-medium text-gray-800 border-r border-gray-200 whitespace-nowrap">
                           {staff.last_name} {staff.first_name}
                         </td>
                         {days.map((day) => {

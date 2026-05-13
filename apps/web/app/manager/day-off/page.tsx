@@ -20,39 +20,41 @@ export default async function ManagerDayOffPage({
     .select("role, store_id, department_id")
     .eq("id", user.id)
     .single();
-  if (employee?.role !== "manager") redirect("/manager/dashboard");
+  if (employee?.role !== "manager") redirect("/");
 
-  const storeId = employee.store_id as string;
-  const deptId = employee.department_id as string;
+  const storeId = employee.store_id;
+  const deptId = employee.department_id;
+  if (!storeId || !deptId) redirect("/");
 
   const { ym } = await searchParams;
   const today = new Date();
   const defaultYm = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
-  const yearMonth = ym && /^\d{4}-\d{2}$/.test(ym) ? ym : defaultYm;
+  const yearMonth = ym && /^\d{4}-(0[1-9]|1[0-2])$/.test(ym) ? ym : defaultYm;
   const [year, month] = yearMonth.split("-").map(Number);
   const lastDay = new Date(year, month, 0).getDate();
 
-  const [staffRes, requestsRes] = await Promise.all([
-    supabase
-      .from("employees")
-      .select("id, last_name, first_name")
-      .eq("store_id", storeId)
-      .eq("department_id", deptId)
-      .eq("is_active", true)
-      .not("work_pattern_id", "is", null)
-      .order("last_name"),
-    supabase
-      .from("day_off_requests")
-      .select("staff_id, target_date")
-      .gte("target_date", `${yearMonth}-01`)
-      .lte("target_date", `${yearMonth}-${String(lastDay).padStart(2, "0")}`),
-  ]);
+  const staffRes = await supabase
+    .from("employees")
+    .select("id, last_name, first_name")
+    .eq("store_id", storeId)
+    .eq("department_id", deptId)
+    .eq("is_active", true)
+    .not("work_pattern_id", "is", null)
+    .order("last_name");
 
   const staffList = staffRes.data ?? [];
-  const staffIds = new Set(staffList.map((s) => s.id));
-  const requests = (requestsRes.data ?? []).filter((r) =>
-    staffIds.has(r.staff_id)
-  ) as { staff_id: string; target_date: string }[];
+
+  const requestsRes = await supabase
+    .from("day_off_requests")
+    .select("staff_id, target_date")
+    .gte("target_date", `${yearMonth}-01`)
+    .lte("target_date", `${yearMonth}-${String(lastDay).padStart(2, "0")}`)
+    .in("staff_id", staffList.map((s) => s.id));
+
+  const requests = (requestsRes.data ?? []) as {
+    staff_id: string;
+    target_date: string;
+  }[];
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-8">
