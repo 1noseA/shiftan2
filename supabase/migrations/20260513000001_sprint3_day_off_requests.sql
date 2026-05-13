@@ -27,9 +27,6 @@ create table if not exists public.day_off_requests (
   constraint day_off_requests_unique unique (staff_id, target_date)
 );
 
-create index if not exists day_off_requests_staff_date_idx
-  on public.day_off_requests (staff_id, target_date);
-
 create index if not exists day_off_requests_target_date_idx
   on public.day_off_requests (target_date);
 

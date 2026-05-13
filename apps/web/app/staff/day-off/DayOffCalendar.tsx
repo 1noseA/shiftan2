@@ -63,6 +63,8 @@ export default function DayOffCalendar({
           setError("締切日を過ぎているため変更できません");
         } else if (msg === "max_days_exceeded") {
           setError(`希望休は月${maxDays}日までです`);
+        } else if (msg === "past_date") {
+          setError("過去の日付は選択できません");
         } else {
           setError("エラーが発生しました。再度お試しください");
         }

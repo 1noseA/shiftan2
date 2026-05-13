@@ -23,8 +23,7 @@ export default async function StaffDayOffPage({
   if (employee?.role !== "staff") redirect("/manager/dashboard");
 
   const { ym } = await searchParams;
-  const today = new Date();
-  const defaultYm = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+  const defaultYm = new Date().toLocaleString("sv", { timeZone: "Asia/Tokyo" }).slice(0, 7);
   const yearMonth = ym && /^\d{4}-\d{2}$/.test(ym) ? ym : defaultYm;
   const [year, month] = yearMonth.split("-").map(Number);
 
@@ -47,9 +46,8 @@ export default async function StaffDayOffPage({
   const deadlineDay = settingsRes.data?.day_off_request_deadline_day ?? 10;
   const maxDays = settingsRes.data?.day_off_max_per_month ?? 3;
 
-  const deadlineMonth = month === 1 ? 12 : month - 1;
-  const deadlineYear = month === 1 ? year - 1 : year;
-  const deadlineDate = `${deadlineYear}-${String(deadlineMonth).padStart(2, "0")}-${String(deadlineDay).padStart(2, "0")}`;
+  const dl = new Date(month === 1 ? year - 1 : year, (month === 1 ? 12 : month - 1) - 1, deadlineDay);
+  const deadlineDate = `${dl.getFullYear()}-${String(dl.getMonth() + 1).padStart(2, "0")}-${String(dl.getDate()).padStart(2, "0")}`;
 
   const requestedDates = (requestsRes.data ?? []).map(
     (r) => r.target_date as string
