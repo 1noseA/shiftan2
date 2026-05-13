@@ -24,12 +24,12 @@
 
 ## Sprint 2：シフト条件設定
 
-- [ ] `shift_settings` / `required_staff_counts` / `auto_generation_settings` / `relationship_constraints` テーブルマイグレーション作成
-- [ ] RLS ポリシー設定
-- [ ] 希望休締切日・上限日数設定UI (shift_settings UPSERT)
-- [ ] 必要人数設定UI（平日/休日 × 勤務パターンマトリクス）
-- [ ] 自動生成条件設定UI（チェックボックス、auto_generation_settings UPSERT）
-- [ ] 人間関係制約設定UI（一覧・新規登録・有効/無効切替）
+- [x] `shift_settings` / `required_staff_counts` / `auto_generation_settings` / `relationship_constraints` テーブルマイグレーション作成
+- [x] RLS ポリシー設定
+- [x] 希望休締切日・上限日数設定UI (shift_settings UPSERT)
+- [x] 必要人数設定UI（平日/休日 × 勤務パターンマトリクス）
+- [x] 自動生成条件設定UI（チェックボックス、auto_generation_settings UPSERT）
+- [x] 人間関係制約設定UI（一覧・新規登録・有効/無効切替）
 
 ## Sprint 3：希望休入力
 
