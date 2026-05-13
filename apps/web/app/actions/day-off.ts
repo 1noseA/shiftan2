@@ -20,6 +20,8 @@ async function requireStaff() {
 }
 
 export async function toggleDayOff(targetDate: string, yearMonth: string) {
+  if (!/^\d{4}-\d{2}$/.test(yearMonth)) throw new Error("invalid_date");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) throw new Error("invalid_date");
   if (!targetDate.startsWith(yearMonth)) throw new Error("invalid_date");
 
   const { supabase, userId } = await requireStaff();
@@ -41,6 +43,9 @@ export async function toggleDayOff(targetDate: string, yearMonth: string) {
       throw new Error(error.message);
     }
   } else {
+    const todayJST = new Intl.DateTimeFormat("sv", { timeZone: "Asia/Tokyo" }).format(new Date());
+    if (targetDate < todayJST) throw new Error("past_date");
+
     const [year, month] = yearMonth.split("-").map(Number);
     const lastDay = new Date(year, month, 0).getDate();
 
@@ -67,6 +72,7 @@ export async function toggleDayOff(targetDate: string, yearMonth: string) {
     if (error) {
       if (error.code === "42501") throw new Error("deadline_passed");
       if (error.code === "23505") throw new Error("already_requested");
+      if (error.code === "P0001") throw new Error("max_days_exceeded");
       throw new Error(error.message);
     }
   }

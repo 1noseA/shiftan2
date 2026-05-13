@@ -31,7 +31,7 @@ export default function DayOffCalendar({
   const [error, setError] = useState<string | null>(null);
 
   const [year, month] = yearMonth.split("-").map(Number);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Intl.DateTimeFormat("sv", { timeZone: "Asia/Tokyo" }).format(new Date());
   const isDeadlinePassed = today > deadlineDate;
 
   const daysInMonth = new Date(year, month, 0).getDate();
