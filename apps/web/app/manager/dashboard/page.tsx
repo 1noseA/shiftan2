@@ -6,6 +6,7 @@ import LogoutButton from "@/components/LogoutButton";
 const MENU = [
   { href: "/manager/staff", label: "スタッフ管理", description: "スタッフ一覧・招待・編集" },
   { href: "/manager/settings", label: "設定", description: "シフト条件・必要人数・自動生成条件" },
+  { href: "/manager/day-off", label: "希望休一覧", description: "自部門スタッフの希望休を確認" },
 ];
 
 export default async function ManagerDashboard() {
