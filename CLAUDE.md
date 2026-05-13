@@ -74,6 +74,13 @@ shift_generator/
 - `work_pattern_id IS NOT NULL` のスタッフのみシフト割当対象。office ロールは常に除外される
 - `reasons[]` の各 type（`day_off_excess` / `pattern_mismatch` / `consecutive_limit`）は対応するフラグが ON のときのみ報告する
 
+## 作業ルール
+
+### スプリント実装完了時
+
+1. `docs/tasks.md` の該当スプリントのタスクに全てチェックを入れる（`[ ]` → `[x]`）
+2. コミットメッセージ候補を提案する（形式：`Sprint X：<内容>`）
+
 ## 設計書
 
 実装の詳細は `docs/` を参照：
