@@ -223,6 +223,10 @@ begin
     raise exception 'optimistic_lock_conflict' using errcode = 'P0001';
   end if;
 
+  if v_shift.status = 'published' then
+    raise exception 'cannot_edit_published_shift' using errcode = 'P0006';
+  end if;
+
   if date_trunc('month', p_target_date)::date <> v_shift.target_year_month then
     raise exception 'invalid_target_date' using errcode = 'P0004';
   end if;
@@ -351,6 +355,10 @@ begin
     raise exception 'optimistic_lock_conflict' using errcode = 'P0001';
   end if;
 
+  if v_shift.status = 'published' then
+    raise exception 'cannot_edit_published_shift' using errcode = 'P0006';
+  end if;
+
   delete from public.shift_assignments
   where id = p_assignment_id
     and shift_id = p_shift_id
@@ -436,7 +444,6 @@ begin
 end;
 $$;
 
-grant execute on function public.assert_active_manager() to authenticated;
 grant execute on function public.fn_ensure_shift_draft(date) to authenticated;
 grant execute on function public.fn_assign_shift(uuid, date, uuid, uuid, timestamptz, uuid) to authenticated;
 grant execute on function public.fn_upsert_shift_assignment(uuid, date, uuid, uuid, timestamptz, uuid) to authenticated;

@@ -185,11 +185,13 @@ export default function ShiftBoard(props: Props) {
     const confirmed = window.confirm("この割当を削除しますか？");
     if (!confirmed) return;
 
+    const assignmentId = modal.existingAssignment.id;
+
     startTransition(async () => {
       const { error } = await supabase.rpc("fn_remove_assignment", {
-        p_assignment_id: modal.existingAssignment?.id,
-        p_shift_id: props.shift?.id,
-        p_expected_updated_at: props.shift?.updated_at,
+        p_assignment_id: assignmentId,
+        p_shift_id: currentShift.id,
+        p_expected_updated_at: currentShift.updated_at,
       });
       if (error) {
         setErrorMessage(mapRpcError(error.code, error.message));
@@ -632,9 +634,11 @@ function mapRpcError(code: string | undefined, message: string) {
     case "P0005":
     case "42501":
       return "この操作を実行する権限がありません。";
+    case "P0006":
+      return "公開済みシフトは編集できません。";
     case "23505":
       return "このスタッフは同日に別のシフトへ割り当て済みです。";
     default:
-      return message || "更新に失敗しました。";
+      return "更新に失敗しました。";
   }
 }

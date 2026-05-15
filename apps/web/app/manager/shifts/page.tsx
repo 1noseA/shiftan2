@@ -37,8 +37,10 @@ export default async function ManagerShiftsPage({
   const [year, month] = yearMonth.split("-").map(Number);
   const monthEnd = `${yearMonth}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`;
 
-  const storeId = employee.store_id as string;
-  const departmentId = employee.department_id as string;
+  if (!employee?.store_id || !employee?.department_id) redirect("/manager/dashboard");
+
+  const storeId = employee.store_id;
+  const departmentId = employee.department_id;
 
   const [patternsRes, requiredRes, staffRes, shiftRes] = await Promise.all([
     supabase

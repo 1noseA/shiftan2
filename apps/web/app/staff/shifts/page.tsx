@@ -29,7 +29,7 @@ export default async function StaffShiftsPage({
     .eq("id", user.id)
     .single();
 
-  if (employee?.role !== "staff") redirect("/staff/dashboard");
+  if (employee?.role !== "staff") redirect("/manager/dashboard");
 
   const { ym } = await searchParams;
   const today = new Date().toLocaleString("sv", { timeZone: "Asia/Tokyo" }).slice(0, 7);
@@ -37,8 +37,10 @@ export default async function StaffShiftsPage({
   const [year, month] = yearMonth.split("-").map(Number);
   const monthEnd = `${yearMonth}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`;
 
-  const storeId = employee.store_id as string;
-  const departmentId = employee.department_id as string;
+  if (!employee?.store_id || !employee?.department_id) redirect("/staff/dashboard");
+
+  const storeId = employee.store_id;
+  const departmentId = employee.department_id;
 
   const [patternsRes, requiredRes, staffRes, shiftRes] = await Promise.all([
     supabase
@@ -52,7 +54,7 @@ export default async function StaffShiftsPage({
       .eq("department_id", departmentId),
     supabase
       .from("employees")
-      .select("id, last_name, first_name, work_pattern_id, max_consecutive_workdays")
+      .select("id, last_name, first_name")
       .eq("store_id", storeId)
       .eq("department_id", departmentId)
       .eq("is_active", true)
@@ -68,7 +70,11 @@ export default async function StaffShiftsPage({
       .maybeSingle(),
   ]);
 
-  const staffList = (staffRes.data ?? []) as StaffMember[];
+  const staffList = ((staffRes.data ?? []).filter((staff) => staff.id === user.id) as StaffMember[]).map((staff) => ({
+    ...staff,
+    work_pattern_id: "",
+    max_consecutive_workdays: 0,
+  }));
   const staffIds = staffList.map((staff) => staff.id);
 
   const [dayOffRes, assignmentsRes] = await Promise.all([
