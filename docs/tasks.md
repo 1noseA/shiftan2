@@ -46,17 +46,17 @@
 
 ## Sprint 5：シフト一覧・手動編集
 
-- [ ] `shifts` テーブルマイグレーション作成（UNIQUE 制約: `(target_year_month, store_id, department_id)`、インデックス: `(store_id, department_id, target_year_month)`）
-- [ ] `shift_assignments` テーブルマイグレーション作成（UNIQUE 制約: `(shift_id, target_date, staff_id)`、インデックス: `(shift_id, target_date)`）
-- [ ] RLS ポリシー設定（`shifts` / `shift_assignments`）
-- [ ] `fn_assign_shift` RPC実装（楽観ロック付き）
-- [ ] `fn_remove_assignment` RPC実装
-- [ ] `fn_publish_shift` RPC実装
-- [ ] シフト一覧画面（日付 × 勤務パターンビュー）
-- [ ] スタッフ割当モーダル（候補者リスト・希望休警告アイコン）
-- [ ] 必要人数不足・超過バッジ表示
-- [ ] 読み取り専用モード / 編集モード切替
-- [ ] シフト公開・非公開切替UI
+- [x] `shifts` テーブルマイグレーション作成（UNIQUE 制約: `(target_year_month, store_id, department_id)`、インデックス: `(store_id, department_id, target_year_month)`）
+- [x] `shift_assignments` テーブルマイグレーション作成（UNIQUE 制約: `(shift_id, target_date, staff_id)`、インデックス: `(shift_id, target_date)`）
+- [x] RLS ポリシー設定（`shifts` / `shift_assignments`）
+- [x] `fn_assign_shift` RPC実装（楽観ロック付き）
+- [x] `fn_remove_assignment` RPC実装
+- [x] `fn_publish_shift` RPC実装
+- [x] シフト一覧画面（日付 × 勤務パターンビュー）
+- [x] スタッフ割当モーダル（候補者リスト・希望休警告アイコン）
+- [x] 必要人数不足・超過バッジ表示
+- [x] 読み取り専用モード / 編集モード切替
+- [x] シフト公開・非公開切替UI
 
 ## Sprint 6：Excel出力
 

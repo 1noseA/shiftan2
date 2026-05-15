@@ -5,6 +5,7 @@ import LogoutButton from "@/components/LogoutButton";
 
 const MENU = [
   { href: "/staff/day-off", label: "希望休入力", description: "希望休の登録・確認" },
+  { href: "/staff/shifts", label: "シフト一覧", description: "公開済みシフトを確認" },
 ];
 
 export default async function StaffDashboard() {
