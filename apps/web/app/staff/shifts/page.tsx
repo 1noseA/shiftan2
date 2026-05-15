@@ -70,7 +70,7 @@ export default async function StaffShiftsPage({
       .maybeSingle(),
   ]);
 
-  const staffList = ((staffRes.data ?? []).filter((staff) => staff.id === user.id) as StaffMember[]).map((staff) => ({
+  const staffList = ((staffRes.data ?? []) as Pick<StaffMember, "id" | "last_name" | "first_name">[]).map((staff) => ({
     ...staff,
     work_pattern_id: "",
     max_consecutive_workdays: 0,
