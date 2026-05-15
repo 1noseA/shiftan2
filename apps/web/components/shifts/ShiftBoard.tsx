@@ -22,6 +22,7 @@ import {
   monthDays,
   shiftDate,
 } from "@/lib/shifts";
+import { exportShiftToExcel } from "@/lib/excel";
 
 type Props = {
   role: "manager" | "staff";
@@ -51,6 +52,7 @@ export default function ShiftBoard(props: Props) {
   const [modal, setModal] = useState<ModalState | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [isExporting, setIsExporting] = useState(false);
 
   const isManager = props.role === "manager";
   const days = monthDays(props.yearMonth);
@@ -308,6 +310,31 @@ export default function ShiftBoard(props: Props) {
               </button>
             ))}
           </div>
+
+          {props.shift && (
+            <button
+              onClick={async () => {
+                setIsExporting(true);
+                try {
+                  await exportShiftToExcel({
+                    yearMonth: props.yearMonth,
+                    staffList: props.staffList,
+                    assignments: props.assignments,
+                    workPatterns: props.workPatterns,
+                    dayOffRequests: props.dayOffRequests,
+                  });
+                } catch {
+                  setErrorMessage("Excel出力に失敗しました。");
+                } finally {
+                  setIsExporting(false);
+                }
+              }}
+              disabled={isExporting}
+              className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+            >
+              {isExporting ? "出力中..." : "Excel出力"}
+            </button>
+          )}
 
           {isManager && !props.shift && (
             <button
