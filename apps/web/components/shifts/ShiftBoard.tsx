@@ -323,6 +323,8 @@ export default function ShiftBoard(props: Props) {
                     workPatterns: props.workPatterns,
                     dayOffRequests: props.dayOffRequests,
                   });
+                } catch {
+                  setErrorMessage("Excel出力に失敗しました。");
                 } finally {
                   setIsExporting(false);
                 }
